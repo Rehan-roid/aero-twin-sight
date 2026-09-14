@@ -98,8 +98,12 @@ export function EngineViewer({ selectedId, onSelectAssembly }: { selectedId: str
       <div className="engine-zone-tag zone-left"><i />CYL 01 <b>NORMAL</b></div>
       <button type="button" className="engine-zone-tag zone-right" onClick={() => onSelectAssembly()}><i />CYL 02 <b>CAUTION</b></button>
     </div>
-    <EngineControls autoRotate={autoRotate} onAutoRotate={() => setAutoRotate((v) => !v)} onView={changeView} onFullscreen={fullscreen} assembledOnly />
-    <div className="explode-bar"><div><span>Exploded assembly</span><small>Component-separated GLB required</small></div><input type="range" min="0" max="100" value={explode} onChange={(event) => setExplode(Number(event.target.value))} disabled aria-label="Exploded view amount" /><button type="button" disabled>EXPLORE ENGINE</button></div>
+    <EngineControls autoRotate={autoRotate} onAutoRotate={() => setAutoRotate((v) => !v)} onView={changeView} onFullscreen={fullscreen} assembledOnly={explode === 0} />
+    <div className="explode-bar">
+      <div><span>Exploded assembly</span><small>{explode === 0 ? "Assembled · drag the slider or explore" : `Separation ${explode}%`}</small></div>
+      <input type="range" min="0" max="100" value={explode} onChange={(event) => setExplode(Number(event.target.value))} aria-label="Exploded view amount" />
+      <button type="button" onClick={() => setExplode((value) => (value > 0 ? 0 : 100))}>{explode > 0 ? "ASSEMBLE" : "EXPLORE ENGINE"}</button>
+    </div>
   </section>;
 }
 
