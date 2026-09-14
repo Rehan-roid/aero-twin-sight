@@ -1,11 +1,22 @@
 import * as THREE from "three";
 
+export type EngineZone = "cylinder-1" | "cylinder-2" | "crankcase" | "intake" | "exhaust";
+
 export type EnginePart = {
   id: string;
   geometry: THREE.BufferGeometry;
   center: THREE.Vector3;
-  direction: THREE.Vector3;
+  explodeOffset: THREE.Vector3;
+  zone: EngineZone;
   triangles: number;
+};
+
+const ZONE_OFFSETS: Record<EngineZone, THREE.Vector3> = {
+  "cylinder-1": new THREE.Vector3(-0.34, 0.015, 0),
+  "cylinder-2": new THREE.Vector3(0.34, 0.015, 0),
+  crankcase: new THREE.Vector3(0, 0, 0),
+  intake: new THREE.Vector3(0, 0.26, -0.025),
+  exhaust: new THREE.Vector3(0, -0.08, 0.24),
 };
 
 /**
@@ -103,20 +114,30 @@ export function splitEngineParts(source: THREE.BufferGeometry): EnginePart[] {
       id: `part-${n}`,
       geometry,
       center,
-      direction: center.clone(),
+      explodeOffset: new THREE.Vector3(),
+      zone: "crankcase",
       triangles: triangles.length,
     });
   });
 
-  // Explode outward from the assembly centre, mechanically consistent per part.
-  const assemblyCenter = new THREE.Vector3();
-  parts.forEach((part) => assemblyCenter.add(part.center));
-  assemblyCenter.divideScalar(Math.max(parts.length, 1));
+  const retainedBounds = new THREE.Box3();
+  parts.forEach((part) => retainedBounds.expandByPoint(part.center));
+  const assemblyCenter = retainedBounds.getCenter(new THREE.Vector3());
+  const halfSize = retainedBounds.getSize(new THREE.Vector3()).multiplyScalar(0.5);
+
+  // The source is one mesh, so assign its disconnected shells to broad spatial
+  // monitor zones. Every shell in a zone follows one restrained mechanical axis.
   parts.forEach((part) => {
-    const direction = part.center.clone().sub(assemblyCenter);
-    direction.y *= 1.6;
-    if (direction.lengthSq() < 1e-6) direction.set(0, 1, 0);
-    part.direction = direction.normalize();
+    const relative = part.center.clone().sub(assemblyCenter);
+    const nx = relative.x / Math.max(halfSize.x, 0.001);
+    const ny = relative.y / Math.max(halfSize.y, 0.001);
+    const nz = relative.z / Math.max(halfSize.z, 0.001);
+    if (ny > 0.5 && Math.abs(nx) < 0.58) part.zone = "intake";
+    else if (nx < -0.34) part.zone = "cylinder-1";
+    else if (nx > 0.34) part.zone = "cylinder-2";
+    else if (nz > 0.38 && ny < 0.3) part.zone = "exhaust";
+    else part.zone = "crankcase";
+    part.explodeOffset.copy(ZONE_OFFSETS[part.zone]);
   });
 
   return parts.sort((a, b) => b.triangles - a.triangles);

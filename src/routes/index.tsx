@@ -34,7 +34,7 @@ function Index() {
         <div className="topbar-meta"><span><Clock3 />MISSION T+ 04:27:18</span><button type="button" title="Alerts" aria-label="Alerts"><Bell /><i /></button><button type="button" title="Help" aria-label="Help"><CircleHelp /></button><div className="operator"><strong>VK</strong><span>Vehicle 04<small>FLIGHT DEMO</small></span></div></div>
       </header>
       <div className="main-grid">
-        <EngineViewer selectedId={selectedId} onSelectAssembly={() => setSelectedId("assembly")} />
+        <EngineViewer selectedId={selectedId} onSelectComponent={setSelectedId} />
         <ComponentInfoPanel component={selected} components={engineComponents} onSelect={setSelectedId} />
       </div>
       <MissionReliability />
