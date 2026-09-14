@@ -5,6 +5,7 @@ import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import * as THREE from "three";
 import engineAsset from "@/assets/twin-piston-engine.glb.asset.json";
 import { EngineControls, type CameraView } from "./EngineControls";
+import { splitEngineParts } from "@/lib/engine-parts";
 
 const VIEW_POSITIONS: Record<CameraView, THREE.Vector3> = { reset: new THREE.Vector3(5.6, 3.2, 6.4), front: new THREE.Vector3(0, 0.2, 8), side: new THREE.Vector3(8, 0.2, 0), top: new THREE.Vector3(0, 8, 0.01) };
 
@@ -28,26 +29,49 @@ function CameraRig({ targetView, controlsRef }: { targetView: CameraView; contro
   return null;
 }
 
-function EngineModel({ selected, onSelect }: { selected: boolean; onSelect: () => void }) {
+function EngineModel({ selected, onSelect, explode }: { selected: boolean; onSelect: () => void; explode: number }) {
   const { scene } = useGLTF(engineAsset.url);
-  const object = useMemo(() => {
-    const clone = scene.clone(true);
-    clone.traverse((child) => {
-      if (child instanceof THREE.Mesh) {
-        if (!child.geometry.attributes.normal) child.geometry.computeVertexNormals();
-        child.material = new THREE.MeshStandardMaterial({ color: new THREE.Color("#75848c"), metalness: 0.72, roughness: 0.3, emissive: new THREE.Color(selected ? "#9a4c16" : "#000000"), emissiveIntensity: selected ? 0.12 : 0 });
-      }
-    });
-    const bounds = new THREE.Box3().setFromObject(clone);
+  const groupRef = useRef<THREE.Group>(null);
+  const explodeRef = useRef(0);
+
+  const { parts, scale, offset } = useMemo(() => {
+    let geometry: THREE.BufferGeometry | null = null;
+    scene.traverse((child) => { if (child instanceof THREE.Mesh && !geometry) geometry = child.geometry as THREE.BufferGeometry; });
+    if (!geometry) return { parts: [], scale: 1, offset: new THREE.Vector3() };
+    const split = splitEngineParts(geometry);
+    const bounds = new THREE.Box3();
+    split.forEach((part) => { part.geometry.computeBoundingBox(); if (part.geometry.boundingBox) bounds.union(part.geometry.boundingBox); });
     const size = bounds.getSize(new THREE.Vector3());
-    clone.scale.setScalar(4.7 / Math.max(size.x, size.y, size.z));
-    const scaled = new THREE.Box3().setFromObject(clone);
-    const center = scaled.getCenter(new THREE.Vector3());
-    clone.position.sub(center);
-    return clone;
-  }, [scene, selected]);
-  return <primitive object={object} onClick={(event: { stopPropagation: () => void }) => { event.stopPropagation(); onSelect(); }} />;
+    return { parts: split, scale: 4.7 / Math.max(size.x, size.y, size.z), offset: bounds.getCenter(new THREE.Vector3()).negate() };
+  }, [scene]);
+
+  const material = useMemo(() => new THREE.MeshStandardMaterial({ color: new THREE.Color("#75848c"), metalness: 0.72, roughness: 0.3 }), []);
+  useEffect(() => {
+    material.emissive.set(selected ? "#9a4c16" : "#000000");
+    material.emissiveIntensity = selected ? 0.12 : 0;
+  }, [material, selected]);
+  useEffect(() => () => { material.dispose(); parts.forEach((part) => part.geometry.dispose()); }, [material, parts]);
+
+  useFrame((_, rawDelta) => {
+    const delta = Math.min(rawDelta, 0.05);
+    explodeRef.current = THREE.MathUtils.lerp(explodeRef.current, explode, 1 - Math.exp(-6 * delta));
+    const group = groupRef.current;
+    if (!group) return;
+    const amount = explodeRef.current * 0.5;
+    group.children.forEach((child, i) => {
+      const part = parts[i];
+      if (!part) return;
+      child.position.set(part.direction.x * amount, part.direction.y * amount, part.direction.z * amount);
+    });
+  });
+
+  return <group scale={scale} onClick={(event: { stopPropagation: () => void }) => { event.stopPropagation(); onSelect(); }}>
+    <group ref={groupRef} position={[offset.x, offset.y, offset.z]}>
+      {parts.map((part) => <mesh key={part.id} geometry={part.geometry} material={material} />)}
+    </group>
+  </group>;
 }
+
 
 export function EngineViewer({ selectedId, onSelectAssembly }: { selectedId: string; onSelectAssembly: () => void }) {
   const controlsRef = useRef<OrbitControlsImpl>(null);
@@ -66,7 +90,7 @@ export function EngineViewer({ selectedId, onSelectAssembly }: { selectedId: str
         <directionalLight position={[4, 7, 5]} intensity={3.2} />
         <directionalLight position={[-5, 1, -3]} intensity={1.8} color="#a9d4dd" />
         <Environment resolution={128}><Lightformer intensity={4} position={[0, 5, 2]} scale={[8, 8, 1]} /><Lightformer intensity={2} position={[-5, 0, 0]} rotation-y={Math.PI / 2} scale={[8, 3, 1]} /></Environment>
-        <Suspense fallback={<Loader />}><EngineModel selected={selectedId === "assembly"} onSelect={onSelectAssembly} /></Suspense>
+        <Suspense fallback={<Loader />}><EngineModel selected={selectedId === "assembly"} onSelect={onSelectAssembly} explode={explode / 100} /></Suspense>
         <OrbitControls ref={controlsRef} makeDefault enableDamping dampingFactor={0.075} rotateSpeed={0.62} zoomSpeed={0.7} panSpeed={0.55} minDistance={3.8} maxDistance={13} autoRotate={autoRotate} autoRotateSpeed={0.7} />
         <CameraRig targetView={view} controlsRef={controlsRef} />
       </Canvas>
@@ -74,8 +98,12 @@ export function EngineViewer({ selectedId, onSelectAssembly }: { selectedId: str
       <div className="engine-zone-tag zone-left"><i />CYL 01 <b>NORMAL</b></div>
       <button type="button" className="engine-zone-tag zone-right" onClick={() => onSelectAssembly()}><i />CYL 02 <b>CAUTION</b></button>
     </div>
-    <EngineControls autoRotate={autoRotate} onAutoRotate={() => setAutoRotate((v) => !v)} onView={changeView} onFullscreen={fullscreen} assembledOnly />
-    <div className="explode-bar"><div><span>Exploded assembly</span><small>Component-separated GLB required</small></div><input type="range" min="0" max="100" value={explode} onChange={(event) => setExplode(Number(event.target.value))} disabled aria-label="Exploded view amount" /><button type="button" disabled>EXPLORE ENGINE</button></div>
+    <EngineControls autoRotate={autoRotate} onAutoRotate={() => setAutoRotate((v) => !v)} onView={changeView} onFullscreen={fullscreen} assembledOnly={explode === 0} />
+    <div className="explode-bar">
+      <div><span>Exploded assembly</span><small>{explode === 0 ? "Assembled · drag the slider or explore" : `Separation ${explode}%`}</small></div>
+      <input type="range" min="0" max="100" value={explode} onChange={(event) => setExplode(Number(event.target.value))} aria-label="Exploded view amount" />
+      <button type="button" onClick={() => setExplode((value) => (value > 0 ? 0 : 100))}>{explode > 0 ? "ASSEMBLE" : "EXPLORE ENGINE"}</button>
+    </div>
   </section>;
 }
 
