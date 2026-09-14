@@ -90,7 +90,7 @@ export function EngineViewer({ selectedId, onSelectAssembly }: { selectedId: str
         <directionalLight position={[4, 7, 5]} intensity={3.2} />
         <directionalLight position={[-5, 1, -3]} intensity={1.8} color="#a9d4dd" />
         <Environment resolution={128}><Lightformer intensity={4} position={[0, 5, 2]} scale={[8, 8, 1]} /><Lightformer intensity={2} position={[-5, 0, 0]} rotation-y={Math.PI / 2} scale={[8, 3, 1]} /></Environment>
-        <Suspense fallback={<Loader />}><EngineModel selected={selectedId === "assembly"} onSelect={onSelectAssembly} /></Suspense>
+        <Suspense fallback={<Loader />}><EngineModel selected={selectedId === "assembly"} onSelect={onSelectAssembly} explode={explode / 100} /></Suspense>
         <OrbitControls ref={controlsRef} makeDefault enableDamping dampingFactor={0.075} rotateSpeed={0.62} zoomSpeed={0.7} panSpeed={0.55} minDistance={3.8} maxDistance={13} autoRotate={autoRotate} autoRotateSpeed={0.7} />
         <CameraRig targetView={view} controlsRef={controlsRef} />
       </Canvas>
