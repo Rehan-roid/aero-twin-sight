@@ -28,26 +28,49 @@ function CameraRig({ targetView, controlsRef }: { targetView: CameraView; contro
   return null;
 }
 
-function EngineModel({ selected, onSelect }: { selected: boolean; onSelect: () => void }) {
+function EngineModel({ selected, onSelect, explode }: { selected: boolean; onSelect: () => void; explode: number }) {
   const { scene } = useGLTF(engineAsset.url);
-  const object = useMemo(() => {
-    const clone = scene.clone(true);
-    clone.traverse((child) => {
-      if (child instanceof THREE.Mesh) {
-        if (!child.geometry.attributes.normal) child.geometry.computeVertexNormals();
-        child.material = new THREE.MeshStandardMaterial({ color: new THREE.Color("#75848c"), metalness: 0.72, roughness: 0.3, emissive: new THREE.Color(selected ? "#9a4c16" : "#000000"), emissiveIntensity: selected ? 0.12 : 0 });
-      }
-    });
-    const bounds = new THREE.Box3().setFromObject(clone);
+  const groupRef = useRef<THREE.Group>(null);
+  const explodeRef = useRef(0);
+
+  const { parts, scale, offset } = useMemo(() => {
+    let geometry: THREE.BufferGeometry | null = null;
+    scene.traverse((child) => { if (child instanceof THREE.Mesh && !geometry) geometry = child.geometry as THREE.BufferGeometry; });
+    if (!geometry) return { parts: [], scale: 1, offset: new THREE.Vector3() };
+    const split = splitEngineParts(geometry);
+    const bounds = new THREE.Box3();
+    split.forEach((part) => { part.geometry.computeBoundingBox(); if (part.geometry.boundingBox) bounds.union(part.geometry.boundingBox); });
     const size = bounds.getSize(new THREE.Vector3());
-    clone.scale.setScalar(4.7 / Math.max(size.x, size.y, size.z));
-    const scaled = new THREE.Box3().setFromObject(clone);
-    const center = scaled.getCenter(new THREE.Vector3());
-    clone.position.sub(center);
-    return clone;
-  }, [scene, selected]);
-  return <primitive object={object} onClick={(event: { stopPropagation: () => void }) => { event.stopPropagation(); onSelect(); }} />;
+    return { parts: split, scale: 4.7 / Math.max(size.x, size.y, size.z), offset: bounds.getCenter(new THREE.Vector3()).negate() };
+  }, [scene]);
+
+  const material = useMemo(() => new THREE.MeshStandardMaterial({ color: new THREE.Color("#75848c"), metalness: 0.72, roughness: 0.3 }), []);
+  useEffect(() => {
+    material.emissive.set(selected ? "#9a4c16" : "#000000");
+    material.emissiveIntensity = selected ? 0.12 : 0;
+  }, [material, selected]);
+  useEffect(() => () => { material.dispose(); parts.forEach((part) => part.geometry.dispose()); }, [material, parts]);
+
+  useFrame((_, rawDelta) => {
+    const delta = Math.min(rawDelta, 0.05);
+    explodeRef.current = THREE.MathUtils.lerp(explodeRef.current, explode, 1 - Math.exp(-6 * delta));
+    const group = groupRef.current;
+    if (!group) return;
+    const amount = explodeRef.current * 1.15;
+    group.children.forEach((child, i) => {
+      const part = parts[i];
+      if (!part) return;
+      child.position.set(part.direction.x * amount, part.direction.y * amount, part.direction.z * amount);
+    });
+  });
+
+  return <group scale={scale} onClick={(event: { stopPropagation: () => void }) => { event.stopPropagation(); onSelect(); }}>
+    <group ref={groupRef} position={[offset.x, offset.y, offset.z]}>
+      {parts.map((part) => <mesh key={part.id} geometry={part.geometry} material={material} />)}
+    </group>
+  </group>;
 }
+
 
 export function EngineViewer({ selectedId, onSelectAssembly }: { selectedId: string; onSelectAssembly: () => void }) {
   const controlsRef = useRef<OrbitControlsImpl>(null);
