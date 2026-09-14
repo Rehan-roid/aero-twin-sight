@@ -5,6 +5,7 @@ import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import * as THREE from "three";
 import engineAsset from "@/assets/twin-piston-engine.glb.asset.json";
 import { EngineControls, type CameraView } from "./EngineControls";
+import { splitEngineParts } from "@/lib/engine-parts";
 
 const VIEW_POSITIONS: Record<CameraView, THREE.Vector3> = { reset: new THREE.Vector3(5.6, 3.2, 6.4), front: new THREE.Vector3(0, 0.2, 8), side: new THREE.Vector3(8, 0.2, 0), top: new THREE.Vector3(0, 8, 0.01) };
 
