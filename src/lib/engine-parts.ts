@@ -36,9 +36,12 @@ export function splitEngineParts(source: THREE.BufferGeometry): EnginePart[] {
   }
   const find = (x: number): number => {
     let root = x;
-    while (parent[root] !== root) {
-      parent[root] = parent[parent[root]];
-      root = parent[root];
+    let up = parent[root] as number;
+    while (up !== root) {
+      const grand = parent[up] as number;
+      parent[root] = grand;
+      root = up;
+      up = parent[root] as number;
     }
     return root;
   };
