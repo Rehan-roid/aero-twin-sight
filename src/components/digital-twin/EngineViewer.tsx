@@ -57,7 +57,7 @@ function EngineModel({ selected, onSelect, explode }: { selected: boolean; onSel
     explodeRef.current = THREE.MathUtils.lerp(explodeRef.current, explode, 1 - Math.exp(-6 * delta));
     const group = groupRef.current;
     if (!group) return;
-    const amount = explodeRef.current * 1.15;
+    const amount = explodeRef.current * 0.5;
     group.children.forEach((child, i) => {
       const part = parts[i];
       if (!part) return;
