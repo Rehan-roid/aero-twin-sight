@@ -17,7 +17,7 @@ export const Route = createFileRoute("/")({
     { property: "og:description", content: "Interactive twin-piston aero-engine health and mission reliability demonstrator." },
     { property: "og:type", content: "website" },
     { name: "twitter:card", content: "summary_large_image" },
-  ]},),
+  ]}),
   component: Index,
 });
 
