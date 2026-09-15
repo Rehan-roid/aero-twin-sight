@@ -1,12 +1,11 @@
-import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { Environment, Html, Lightformer, OrbitControls, useGLTF, useProgress } from "@react-three/drei";
-import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
+import { ContactShadows, Environment, Lightformer, OrbitControls } from "@react-three/drei";
+import { GLTFLoader, type OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import * as THREE from "three";
 import engineAsset from "@/assets/twin-piston-engine.glb.asset.json";
 import { EngineControls, type CameraView } from "./EngineControls";
 import { splitEngineParts, type EngineZone } from "@/lib/engine-parts";
-import { Button } from "@/components/ui/button";
 
 const VIEW_POSITIONS: Record<CameraView, THREE.Vector3> = { reset: new THREE.Vector3(5.6, 3.2, 6.4), front: new THREE.Vector3(0, 0.2, 8), side: new THREE.Vector3(8, 0.2, 0), top: new THREE.Vector3(0, 8, 0.01) };
 const COMPONENT_FOCUS: Record<string, THREE.Vector3> = {
@@ -19,11 +18,6 @@ const COMPONENT_FOCUS: Record<string, THREE.Vector3> = {
   sensors: new THREE.Vector3(0, 0.35, 0.35),
 };
 const ZONE_LABELS: Record<EngineZone, string> = { "cylinder-1": "Cylinder 1", "cylinder-2": "Cylinder 2", crankcase: "Crankcase", intake: "Intake system", exhaust: "Exhaust system" };
-
-function Loader() {
-  const { progress } = useProgress();
-  return <Html center><div className="engine-loader"><div className="loader-rings"><span /><span /><span /></div><strong>Loading Twin-Piston Engine</strong><p>Preparing Digital Twin...</p><div className="loader-progress"><span style={{ width: `${progress}%` }} /></div><small>{Math.round(progress)}%</small></div></Html>;
-}
 
 function CameraRig({ position, lookAt, transitionKey, controlsRef }: { position: THREE.Vector3; lookAt: THREE.Vector3; transitionKey: number; controlsRef: React.RefObject<OrbitControlsImpl | null> }) {
   const { camera } = useThree();
@@ -41,12 +35,24 @@ function CameraRig({ position, lookAt, transitionKey, controlsRef }: { position:
   return null;
 }
 
-function EngineModel({ selectedId, hoveredZone, onHover, onSelect, explode }: { selectedId: string; hoveredZone: EngineZone | null; onHover: (zone: EngineZone | null, x?: number, y?: number) => void; onSelect: (id: string) => void; explode: number }) {
-  const { scene } = useGLTF(engineAsset.url);
+function EngineModel({ selectedId, hoveredZone, onHover, onSelect, onReady, explode }: { selectedId: string; hoveredZone: EngineZone | null; onHover: (zone: EngineZone | null, x?: number, y?: number) => void; onSelect: (id: string) => void; onReady: () => void; explode: number }) {
+  const [scene, setScene] = useState<THREE.Group | null>(null);
   const groupRef = useRef<THREE.Group>(null);
   const explodeRef = useRef(0);
 
+  useEffect(() => {
+    let active = true;
+    const loader = new GLTFLoader();
+    loader.load(engineAsset.url, (gltf) => {
+      if (!active) return;
+      setScene(gltf.scene);
+      onReady();
+    });
+    return () => { active = false; };
+  }, [onReady]);
+
   const { parts, scale, offset } = useMemo(() => {
+    if (!scene) return { parts: [], scale: 1, offset: new THREE.Vector3() };
     let geometry: THREE.BufferGeometry | null = null;
     scene.traverse((child) => { if (child instanceof THREE.Mesh && !geometry) geometry = child.geometry as THREE.BufferGeometry; });
     if (!geometry) return { parts: [], scale: 1, offset: new THREE.Vector3() };
@@ -102,11 +108,13 @@ export function EngineViewer({ selectedId, onSelectComponent }: { selectedId: st
   const containerRef = useRef<HTMLDivElement>(null);
   const [autoRotate, setAutoRotate] = useState(true);
   const [explode, setExplode] = useState(0);
+  const [modelReady, setModelReady] = useState(false);
+  const handleModelReady = useCallback(() => setModelReady(true), []);
   const [hovered, setHovered] = useState<{ zone: EngineZone; x: number; y: number } | null>(null);
   const [cameraRequest, setCameraRequest] = useState(() => ({ position: VIEW_POSITIONS.reset.clone(), lookAt: new THREE.Vector3(), key: 0 }));
   const requestCamera = (position: THREE.Vector3, lookAt = new THREE.Vector3()) => setCameraRequest((current) => ({ position: position.clone(), lookAt: lookAt.clone(), key: current.key + 1 }));
   useEffect(() => {
-    const focus = COMPONENT_FOCUS[selectedId] ?? COMPONENT_FOCUS.assembly;
+    const focus = COMPONENT_FOCUS[selectedId] ?? COMPONENT_FOCUS["assembly"];
     if (!focus) return;
     const distance = selectedId === "assembly" ? 1 : 0.78;
     requestCamera(VIEW_POSITIONS.reset.clone().multiplyScalar(distance).add(focus), focus);
@@ -120,29 +128,30 @@ export function EngineViewer({ selectedId, onSelectComponent }: { selectedId: st
   const resetViewer = () => { setExplode(0); setHovered(null); onSelectComponent("assembly"); requestCamera(VIEW_POSITIONS.reset); };
   const fullscreen = () => { if (containerRef.current?.requestFullscreen) void containerRef.current.requestFullscreen(); };
   return <section className="viewer-shell" ref={containerRef} aria-label="Interactive twin-piston engine model">
-    <div className="viewer-title"><div><p className="section-kicker">Asset DT-TPA-01</p><h1>Engine digital twin</h1></div><div className="viewer-live"><span />SYNCHRONIZED <small>DEMO</small></div></div>
     <div className="canvas-wrap">
       <Canvas dpr={[1, 1.5]} camera={{ position: [5.6, 3.2, 6.4], fov: 38 }} gl={{ antialias: true, alpha: true, powerPreference: "high-performance" }} onPointerMissed={() => { setHovered(null); onSelectComponent("assembly"); }}>
-        <ambientLight intensity={1.4} />
-        <directionalLight position={[4, 7, 5]} intensity={3.2} />
-        <directionalLight position={[-5, 1, -3]} intensity={1.8} color="#a9d4dd" />
+        <ambientLight intensity={1.65} />
+        <directionalLight position={[4, 7, 5]} intensity={3.6} castShadow />
+        <directionalLight position={[-5, 1, -3]} intensity={1.6} color="#a9d4dd" />
         <Environment resolution={128}><Lightformer intensity={4} position={[0, 5, 2]} scale={[8, 8, 1]} /><Lightformer intensity={2} position={[-5, 0, 0]} rotation-y={Math.PI / 2} scale={[8, 3, 1]} /></Environment>
-        <Suspense fallback={<Loader />}><EngineModel selectedId={selectedId} hoveredZone={hovered?.zone ?? null} onHover={(zone, x = 0, y = 0) => setHovered(zone ? { zone, x, y } : null)} onSelect={onSelectComponent} explode={explode / 100} /></Suspense>
+        <EngineModel selectedId={selectedId} hoveredZone={hovered?.zone ?? null} onHover={(zone, x = 0, y = 0) => setHovered(zone ? { zone, x, y } : null)} onSelect={onSelectComponent} onReady={handleModelReady} explode={explode / 100} />
+        <ContactShadows position={[0, -1.7, 0]} opacity={0.22} scale={8} blur={2.8} far={5} />
         <OrbitControls ref={controlsRef} makeDefault enableDamping dampingFactor={0.075} rotateSpeed={0.62} zoomSpeed={0.7} panSpeed={0.55} minDistance={3.8} maxDistance={13} autoRotate={autoRotate} autoRotateSpeed={0.7} />
         <CameraRig position={cameraRequest.position} lookAt={cameraRequest.lookAt} transitionKey={cameraRequest.key} controlsRef={controlsRef} />
       </Canvas>
+      {!modelReady && <div className="engine-loader"><div className="loader-rings"><span /><span /><span /></div><strong>Loading Twin-Piston Engine</strong><p>Preparing Digital Twin...</p></div>}
       {hovered && <div className="engine-tooltip" style={{ left: hovered.x, top: hovered.y }}>{ZONE_LABELS[hovered.zone]}<small>Click to inspect</small></div>}
       <div className="reticle" aria-hidden="true"><span /><span /><span /><span /></div>
       <div className="engine-zone-tag zone-left"><i />CYL 01 <b>NORMAL</b></div>
       <button type="button" className="engine-zone-tag zone-right" onClick={() => onSelectComponent("cylinder-2")}><i />CYL 02 <b>CAUTION</b></button>
+      <div className="view-cards" aria-label="Camera views">
+        {(["front", "side", "top"] as const).map((view) => <button type="button" key={view} onClick={() => changeView(view)}><span className={`view-engine view-${view}`} />{view}</button>)}
+      </div>
     </div>
-    <EngineControls autoRotate={autoRotate} onAutoRotate={() => setAutoRotate((v) => !v)} onView={changeView} onFullscreen={fullscreen} assembledOnly={explode === 0} />
     <div className="explode-bar">
-      <div><span>Assembly separation</span><small>{explode === 0 ? "Complete engine" : `Controlled separation ${explode}%`}</small></div>
-      <input type="range" min="0" max="100" value={explode} onChange={(event) => setExplode(Number(event.target.value))} aria-label="Exploded view amount" />
-      <div className="explode-actions"><Button variant={explode === 0 ? "command" : "instrument"} size="sm" onClick={() => setExplode(0)}>Assemble</Button><Button variant={explode > 0 ? "command" : "instrument"} size="sm" onClick={() => setExplode(100)}>Explode</Button><Button variant="ghost" size="sm" onClick={resetViewer}>Reset</Button></div>
+      <div className="mode-toggle"><button type="button" data-active={explode === 0} onClick={() => setExplode(0)}>Assembled</button><button type="button" data-active={explode > 0} onClick={() => setExplode(100)}>Exploded</button></div>
+      <div className="explode-control"><span>Exploded View</span><input type="range" min="0" max="100" value={explode} onChange={(event) => setExplode(Number(event.target.value))} aria-label="Explosion amount" /><strong>{explode}%</strong></div>
+      <EngineControls autoRotate={autoRotate} onAutoRotate={() => setAutoRotate((v) => !v)} onView={(view) => view === "reset" ? resetViewer() : changeView(view)} onFullscreen={fullscreen} assembledOnly={explode === 0} />
     </div>
   </section>;
 }
-
-useGLTF.preload(engineAsset.url);

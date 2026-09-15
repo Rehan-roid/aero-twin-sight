@@ -8,7 +8,7 @@ function Sparkline({ points, caution }: { points: number[]; caution: boolean }) 
 
 export function TelemetryPanel({ telemetry }: { telemetry: TelemetryMetric[] }) {
   return <section className="telemetry-band" aria-labelledby="telemetry-title">
-    <div className="telemetry-title"><div><p className="section-kicker">Demo telemetry · 60 sec</p><h2 id="telemetry-title">Engine parameters</h2></div><span>MOCK DATA</span></div>
+    <div className="telemetry-title"><h2 id="telemetry-title">Telemetry Overview</h2><span>Live engine parameters (mock data)</span></div>
     <div className="telemetry-grid">{telemetry.map((metric) => <article className="telemetry-cell" key={metric.id}><div className="metric-head"><span>{metric.label}</span><i className={`status-${metric.status}`} /></div><div className="metric-value"><strong>{metric.value}</strong><span>{metric.unit}</span></div><Sparkline points={metric.trend} caution={metric.status === "caution"} /></article>)}</div>
   </section>;
 }

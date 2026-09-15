@@ -77,13 +77,14 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "AeroTwin Engine Monitor" },
-      { name: "description", content: "Interactive aerospace engine digital twin demonstrator." },
-      { name: "author", content: "SIH26054 Team" },
-      { property: "og:title", content: "AeroTwin Engine Monitor" },
-      { property: "og:description", content: "Interactive aerospace engine digital twin demonstrator." },
+      { title: "Prometheon Digital Twin" },
+      { name: "description", content: "Aircraft engine health and mission reliability intelligence." },
+      { name: "author", content: "Prometheon" },
+      { property: "og:title", content: "Prometheon Digital Twin" },
+      { property: "og:description", content: "Aircraft engine health and mission reliability intelligence." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:site", content: "@Lovable" },
     ],
     links: [
       {

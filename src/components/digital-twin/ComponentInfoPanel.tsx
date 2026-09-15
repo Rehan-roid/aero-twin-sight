@@ -1,17 +1,20 @@
-import { ChevronRight, Cpu, TriangleAlert } from "lucide-react";
+import { Box, X } from "lucide-react";
+import { useState, type CSSProperties } from "react";
 import type { EngineComponent } from "@/types/digital-twin";
 import { StatusIndicator } from "./StatusIndicator";
 
-export function ComponentInfoPanel({ component, components, onSelect }: { component: EngineComponent; components: EngineComponent[]; onSelect: (id: string) => void }) {
+export function ComponentInfoPanel({ component }: { component: EngineComponent; components: EngineComponent[]; onSelect: (id: string) => void }) {
+  const [tab, setTab] = useState("Overview");
   return <aside className="detail-panel">
-    <div className="panel-heading"><div><p className="section-kicker">Selected monitor zone</p><h2>{component.name}</h2></div><StatusIndicator status={component.status} /></div>
-    {component.id === "cylinder-2" && <div className="warning-note"><TriangleAlert /><div><strong>Thermal deviation detected</strong><span>CHT is 12% above the recent baseline.</span></div></div>}
-    <p className="component-description">{component.description}</p>
-    <div className="function-block"><span>Function</span><p>{component.function}</p></div>
-    <div className="parameter-list">{component.parameters.map((item) => <div key={item.label}><span>{item.label}</span><strong className={item.status === "caution" ? "value-caution" : ""}>{item.value}</strong></div>)}</div>
-    <div className="health-block"><div><span>Component health</span><strong>{component.health}%</strong></div><div className="health-track"><span style={{ width: `${component.health}%` }} /></div><div className="fault-line"><span>Predicted fault probability</span><strong>{component.faultProbability}%</strong></div></div>
-    <div className="component-list-heading"><Cpu /><span>Monitored zones</span><small>DEMO</small></div>
-    <div className="component-list">{components.filter((item) => item.id !== "assembly").map((item) => <button type="button" key={item.id} onClick={() => onSelect(item.id)} data-active={item.id === component.id}><span className={`status-dot status-${item.status}`} /><span>{item.shortName}</span><small>{item.health}%</small><ChevronRight /></button>)}</div>
-    <p className="model-caveat">Sensor zones use mock associations. Individual geometry selection requires the component-separated GLB.</p>
+    <div className="drawer-title"><strong>Component Intelligence</strong><X aria-label="Close panel" /></div>
+    <div className="panel-heading"><div className="component-icon"><Box /></div><h2>{component.name}</h2><StatusIndicator status={component.status} /></div>
+    <div className="panel-tabs">{["Overview", "Parameters", "History"].map((name) => <button type="button" data-active={tab === name} onClick={() => setTab(name)} key={name}>{name}</button>)}</div>
+    {tab === "Overview" && <>
+      <div className="component-summary"><div className="component-thumb"><Box /></div><div><span>Function</span><p>{component.function}</p></div></div>
+      <section className="parameter-section"><h3>Current Parameters</h3><div className="parameter-list">{component.parameters.map((item) => <div key={item.label}><span>{item.label}</span><strong className={item.status === "caution" ? "value-caution" : ""}>{item.value}<i className={`status-dot status-${item.status ?? "normal"}`} /></strong></div>)}</div></section>
+    </>}
+    {tab === "Parameters" && <div className="tab-copy"><strong>Live sensor envelope</strong><p>Thermal, vibration, and health channels update against the demo operating baseline.</p></div>}
+    {tab === "History" && <div className="tab-copy"><strong>Recent trend</strong><p>Cylinder temperature has increased by 3% over the current mission window.</p></div>}
+    <section className="engine-health"><h3>Engine Health</h3><div className="health-layout"><div className="health-gauge" style={{ "--health": "87%" } as CSSProperties}><span>87%</span></div><div className="health-metrics"><div><span>Status</span><strong className="value-caution">CAUTION</strong></div><div><span>Anomaly Score</span><strong>0.18</strong></div><div><span>Fault Probability</span><strong>12%</strong></div><div><span>RUL</span><strong>184 h</strong></div><div><span>Mission Risk</span><strong className="value-normal">LOW</strong></div></div></div></section>
   </aside>;
 }
